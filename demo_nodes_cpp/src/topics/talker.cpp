@@ -37,27 +37,8 @@ public:
   explicit Talker(const rclcpp::NodeOptions & options)
   : Node("talker", options)
   {
-    // Create a function for when messages are to be sent.
-    setvbuf(stdout, NULL, _IONBF, BUFSIZ);
-    auto publish_message =
-      [this]() -> void
-      {
-        msg_ = std::make_unique<std_msgs::msg::String>();
-        msg_->data = "Hello World: " + std::to_string(count_++);
-        RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", msg_->data.c_str());
-        // Put the message into a queue to be processed by the middleware.
-        // This call is non-blocking.
-        pub_->publish(std::move(msg_));
-      };
-    // Create a publisher with a custom Quality of Service profile.
-    // Uniform initialization is suggested so it can be trivially changed to
-    // rclcpp::KeepAll{} if the user wishes.
-    // (rclcpp::KeepLast(7) -> rclcpp::KeepAll() fails to compile)
-    rclcpp::QoS qos(rclcpp::KeepLast{7});
-    pub_ = this->create_publisher<std_msgs::msg::String>("chatter", qos);
-
-    // Use a timer to schedule periodic message publishing.
-    timer_ = this->create_wall_timer(1s, publish_message);
+    pub_ = this->create_publisher<std_msgs::msg::String>("chatter", rclcpp::QoS(1));
+    timer_ = this->create_wall_timer(10ms, std::bind(&Talker::onTimer, this));
   }
 
 private:
@@ -65,7 +46,75 @@ private:
   std::unique_ptr<std_msgs::msg::String> msg_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_;
   rclcpp::TimerBase::SharedPtr timer_;
+
+private:
+  void onTimer();
+  void main_logic();
+  double sub_logic_calc(size_t repeat_num = 10000000);
+  double sub_logic_math(uint64_t repeat_num = 10000000);
+  uint8_t sub_logic_mem(uint64_t repeat_num = 10000000, uint64_t array_size = 1000);
 };
+
+void Talker::onTimer()
+{
+  msg_ = std::make_unique<std_msgs::msg::String>();
+  msg_->data = "Hello World: " + std::to_string(count_++);
+  RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", msg_->data.c_str());
+  main_logic();
+  pub_->publish(std::move(msg_));
+}
+
+void Talker::main_logic()
+{
+  auto start_func_1 = std::chrono::steady_clock::now();
+  sub_logic_calc();
+  auto end_func_1 = std::chrono::steady_clock::now();
+
+  auto start_func_2 = std::chrono::steady_clock::now();
+  sub_logic_math();
+  auto end_func_2 = std::chrono::steady_clock::now();
+
+  auto start_func_3 = std::chrono::steady_clock::now();
+  sub_logic_mem();
+  auto end_func_3 = std::chrono::steady_clock::now();
+
+  RCLCPP_INFO(this->get_logger(),
+    "sub_logic_calc: %ld [ms], sub_logic_math: %ld [ms], sub_logic_mem: %ld [ms]",
+    std::chrono::duration_cast<std::chrono::milliseconds>(end_func_1 - start_func_1).count(),
+    std::chrono::duration_cast<std::chrono::milliseconds>(end_func_2 - start_func_2).count(),
+    std::chrono::duration_cast<std::chrono::milliseconds>(end_func_3 - start_func_3).count()
+  );
+}
+
+double Talker::sub_logic_calc(size_t repeat_num)
+{
+  double sum = 0;
+  for (uint64_t i = 0; i < repeat_num; ++i) {
+    sum += i;
+  }
+  return sum;
+}
+
+double Talker::sub_logic_math(uint64_t repeat_num)
+{
+  double sum = 0;
+  for (uint64_t i = 0; i < repeat_num; ++i) {
+    sum += sqrt(sin(i));
+  }
+  return sum;
+}
+
+uint8_t Talker::sub_logic_mem(uint64_t repeat_num, uint64_t array_size)
+{
+  uint8_t temp = 0;
+  auto src = std::make_unique<uint8_t[]>(array_size);
+  auto dst = std::make_unique<uint8_t[]>(array_size);
+  for (uint64_t i = 0; i < repeat_num; ++i) {
+    memcpy(&dst[0], &src[0], array_size * sizeof(uint8_t));
+    temp = dst[0];
+  }
+  return temp;
+}
 
 }  // namespace demo_nodes_cpp
 
